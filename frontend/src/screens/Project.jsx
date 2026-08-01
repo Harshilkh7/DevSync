@@ -296,31 +296,51 @@ const Project = () => {
         }
 
         try {
+            setRunStatus('Mounting files...')
             await container.mount(fileTree)
 
-            const packageJsonContents = getFileContents(fileTree, 'package.json').trim()
-            const shouldInstallDependencies = packageJsonContents && installedPackageJsonRef.current !== packageJsonContents
+            const packageJsonContents =
+                getFileContents(fileTree, 'package.json').trim()
+
+            if (!packageJsonContents) {
+                setRunStatus('package.json not found.')
+                return
+            }
+
+            const shouldInstallDependencies =
+                installedPackageJsonRef.current !== packageJsonContents
 
             if (shouldInstallDependencies) {
                 setRunStatus('Installing dependencies...')
-                const installProcess = await container.spawn('npm', [ 'install' ])
-                installProcess.output.pipeTo(new WritableStream({
-                    write(chunk) {
-                        if (chunk.includes('added') || chunk.includes('audited') || chunk.includes('up to date')) {
-                            setRunStatus('Dependencies installed.')
+
+                const installProcess = await container.spawn('npm', [
+                    'install',
+                    '--no-audit',
+                    '--no-fund',
+                    '--loglevel=error'
+                ])
+
+                installProcess.output.pipeTo(
+                    new WritableStream({
+                        write(chunk) {
+                            console.log('[npm install]', chunk)
                         }
-                    }
-                }))
+                    })
+                )
 
                 const installExitCode = await installProcess.exit
+
+                console.log('npm install exit code:', installExitCode)
+
                 if (installExitCode !== 0) {
-                    setRunStatus(`Install failed with exit code ${installExitCode}`)
+                    setRunStatus(
+                        `Install failed with exit code ${installExitCode}. Check console.`
+                    )
                     return
                 }
 
                 installedPackageJsonRef.current = packageJsonContents
-            } else if (packageJsonContents) {
-                setRunStatus('Dependencies unchanged.')
+                setRunStatus('Dependencies installed.')
             }
 
             if (runProcess) {
@@ -328,22 +348,38 @@ const Project = () => {
             }
 
             setRunStatus('Starting app...')
-            const tempRunProcess = await container.spawn('npm', [ 'start' ])
-            tempRunProcess.output.pipeTo(new WritableStream({
-                write(chunk) {
-                    if (chunk.includes('Error') || chunk.includes('ERR!')) {
-                        setRunStatus('Runtime reported an error. Check generated code.')
+
+            const tempRunProcess = await container.spawn('npm', ['start'])
+
+            tempRunProcess.output.pipeTo(
+                new WritableStream({
+                    write(chunk) {
+                        console.log('[npm start]', chunk)
                     }
+                })
+            )
+
+            tempRunProcess.exit.then((exitCode) => {
+                console.log('npm start exit code:', exitCode)
+
+                if (exitCode !== 0) {
+                    setRunStatus(
+                        `App stopped with exit code ${exitCode}. Check console.`
+                    )
                 }
-            }))
+            })
 
             setRunProcess(tempRunProcess)
 
             container.on('server-ready', (port, url) => {
+                console.log('Server ready:', port, url)
+
                 setIframeUrl(url)
                 setRunStatus(`Running on port ${port}`)
             })
+
         } catch (err) {
+            console.error('WebContainer error:', err)
             setRunStatus(err.message || 'Unable to run project.')
         }
     }
