@@ -13,16 +13,25 @@ const createTestRedisClient = () => {
     };
 };
 
+const redisOptions = {
+    host: process.env.REDIS_HOST,
+    port: Number(process.env.REDIS_PORT || 6379)
+};
+
+if (process.env.REDIS_PASSWORD) {
+    redisOptions.password = process.env.REDIS_PASSWORD;
+}
+
 const redisClient = process.env.NODE_ENV === 'test'
     ? createTestRedisClient()
-    : new Redis({
-        host: process.env.REDIS_HOST,
-        port: process.env.REDIS_PORT,
-        password: process.env.REDIS_PASSWORD
-    });
+    : new Redis(redisOptions);
 
 redisClient.on('connect', () => {
     console.log('Redis connected');
+});
+
+redisClient.on('error', (error) => {
+    console.error('Redis error:', error.message);
 });
 
 export default redisClient;
