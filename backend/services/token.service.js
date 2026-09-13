@@ -10,7 +10,6 @@ export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 const hashJti = (jti) => crypto.createHash('sha256').update(jti).digest('hex');
-
 const getRefreshSecret = () => {
     const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
     if (!secret) throw new Error('JWT refresh secret is not configured');
@@ -22,31 +21,25 @@ export const createTokenPair = async (user, req) => {
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken(jti);
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000);
-    const jtiHash = hashJti(jti);
 
     await RefreshSession.create({
         userId: user._id,
-        jtiHash,
+        jtiHash: hashJti(jti),
         expiresAt,
         userAgent: req.get('user-agent') || '',
     });
 
     await redisClient.set(`refresh:${jti}`, user._id.toString(), 'EX', REFRESH_TOKEN_TTL_SECONDS);
-
     return { accessToken, refreshToken };
 };
 
 export const rotateRefreshToken = async (refreshToken, req) => {
     const decoded = jwt.verify(refreshToken, getRefreshSecret());
+    if (decoded.type !== 'refresh' || !decoded.jti || !decoded.userId) throw new Error('Invalid refresh token');
 
-    if (decoded.type !== 'refresh' || !decoded.jti || !decoded.userId) {
-        throw new Error('Invalid refresh token');
-    }
-
-    const redisUserId = await redisClient.get(`refresh:${decoded.jti}`);
-    if (!redisUserId || redisUserId !== decoded.userId) {
-        throw new Error('Refresh session revoked or expired');
-    }
+    // GETDEL makes a refresh token single-use even if two refresh requests arrive together.
+    const redisUserId = await redisClient.getdel(`refresh:${decoded.jti}`);
+    if (!redisUserId || redisUserId !== decoded.userId) throw new Error('Refresh session revoked or expired');
 
     const oldSession = await RefreshSession.findOne({
         userId: decoded.userId,
@@ -55,21 +48,15 @@ export const rotateRefreshToken = async (refreshToken, req) => {
         expiresAt: { $gt: new Date() },
     });
 
-    if (!oldSession) {
-        await redisClient.del(`refresh:${decoded.jti}`);
-        throw new Error('Refresh session revoked or expired');
-    }
+    if (!oldSession) throw new Error('Refresh session revoked or expired');
 
     const user = await userModel.findById(decoded.userId);
     if (!user) {
-        await redisClient.del(`refresh:${decoded.jti}`);
         await oldSession.updateOne({ revokedAt: new Date() });
         throw new Error('User not found');
     }
 
     await oldSession.updateOne({ revokedAt: new Date() });
-    await redisClient.del(`refresh:${decoded.jti}`);
-
     return createTokenPair(user, req);
 };
 
