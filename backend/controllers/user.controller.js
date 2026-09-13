@@ -3,26 +3,35 @@ import * as userService from '../services/user.service.js';
 import { validationResult } from 'express-validator';
 import redisClient from '../services/redis.service.js';
 
-
 export const createUserController = async (req, res) => {
     const errors = validationResult(req);
 
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
     }
-    try {
-        const user = await userService.createUser(req.body);
 
-        const token = await user.generateJWT();
+    try {
+        const email = req.body.email.trim().toLowerCase();
+        const password = req.body.password;
+
+        const user = await userService.createUser({ email, password });
+        const token = user.generateJWT();
 
         delete user._doc.password;
 
-        res.status(201).json({ user, token });
+        return res.status(201).json({ user, token });
     } catch (error) {
-        if (error.code === 11000) { // MongoDB duplicate key error
-            return res.status(400).json({ message: 'User already exists' });
+        if (error.code === 11000) {
+            return res.status(409).json({
+                message: 'User already exists',
+                errors: [{ msg: 'An account with this email already exists. Please sign in.' }]
+            });
         }
-        res.status(400).json({ message: error.message });
+
+        console.error('Registration failed:', error);
+        return res.status(400).json({
+            message: error.message || 'Registration failed'
+        });
     }
 };
 
@@ -34,77 +43,71 @@ export const loginController = async (req, res) => {
     }
 
     try {
-
-        const { email, password } = req.body;
+        const email = req.body.email.trim().toLowerCase();
+        const { password } = req.body;
 
         const user = await userModel.findOne({ email }).select('+password');
 
         if (!user) {
             return res.status(401).json({
-                errors: 'Invalid credentials'
-            })
+                errors: 'Invalid credentials',
+                message: 'Invalid email or password'
+            });
         }
 
         const isMatch = await user.isValidPassword(password);
 
         if (!isMatch) {
             return res.status(401).json({
-                errors: 'Invalid credentials'
-            })
+                errors: 'Invalid credentials',
+                message: 'Invalid email or password'
+            });
         }
 
-        const token = await user.generateJWT();
-
+        const token = user.generateJWT();
         delete user._doc.password;
 
-        res.status(200).json({ user, token });
-
-
+        return res.status(200).json({ user, token });
     } catch (err) {
-        res.status(400).send(err.message);
+        console.error('Login failed:', err);
+        return res.status(500).json({
+            message: 'Login failed. Please try again.'
+        });
     }
-}
+};
 
 export const profileController = async (req, res) => {
-
     res.status(200).json({
         user: req.user
     });
-
-}
+};
 
 export const logoutController = async (req, res) => {
     try {
-
-        const token = req.cookies.token || req.headers.authorization.split(' ')[ 1 ];
+        const token = req.cookies.token || req.headers.authorization.split(' ')[1];
 
         redisClient.set(token, 'logout', 'EX', 60 * 60 * 24);
 
         res.status(200).json({
             message: 'Logged out successfully'
         });
-
-
     } catch (err) {
         res.status(400).send(err.message);
     }
-}
+};
 
 export const getAllUsersController = async (req, res) => {
     try {
-
         const loggedInUser = await userModel.findOne({
             email: req.user.email
-        })
+        });
 
         const allUsers = await userService.getAllUsers({ userId: loggedInUser._id });
 
         return res.status(200).json({
             users: allUsers
-        })
-
+        });
     } catch (err) {
-        res.status(400).json({ error: err.message })
-
+        res.status(400).json({ error: err.message });
     }
-}
+};
