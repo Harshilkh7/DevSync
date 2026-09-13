@@ -19,9 +19,7 @@ const Home = () => {
         e.preventDefault();
         setProjectError('');
 
-        axios.post('/projects/create', {
-            name: projectName,
-        })
+        axios.post('/projects/create', { name: projectName })
             .then(() => {
                 setIsModalOpen(false);
                 setProjectName('');
@@ -45,9 +43,7 @@ const Home = () => {
     };
 
     const deleteProject = (projectId) => {
-        if (!window.confirm('Delete this project and its chat history?')) {
-            return;
-        }
+        if (!window.confirm('Delete this project and its chat history?')) return;
 
         axios.delete(`/projects/delete/${projectId}`).then(() => {
             fetchProjects();
@@ -72,231 +68,48 @@ const Home = () => {
     }, [user]);
 
     const handleLogout = async () => {
-        try {
-            await axios.get('/users/logout');
-            localStorage.removeItem('token');
-            logout(); // This will clear chat data and set user to null
-            navigate('/login');
-        } catch {
-            localStorage.removeItem('token');
-            logout();
-            navigate('/login');
-        }
-    };
-
-    const formatDate = (date) => {
-        if (!date) {
-            return 'Not updated yet';
-        }
-
-        return new Intl.DateTimeFormat(undefined, {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        }).format(new Date(date));
-    };
-
-    const getUserId = (projectUser) => (projectUser?._id || projectUser)?.toString();
-
-    const getCollaboratorCount = (projectItem) => {
-        const ownerId = getUserId(projectItem.createdBy);
-        const projectUsers = projectItem.users || [];
-
-        if (ownerId && projectUsers.length > 0) {
-            return projectUsers.filter((projectUser) => getUserId(projectUser) !== ownerId).length;
-        }
-
-        return projectItem.collaboratorCount ?? 0;
+        await logout();
+        navigate('/login');
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
-            {/* Header */}
-            <header className="bg-gradient-to-r from-slate-800/80 to-blue-800/80 backdrop-blur-sm border-b border-cyan-500/30">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
-                        <div className="flex items-center space-x-3">
-                            <img src={Logo} alt="DevSync" className="w-8 h-8" />
-                            <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">DevSync</h1>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                            <div className="flex items-center space-x-2">
-                                <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center">
-                                    <span className="text-white text-sm font-medium">
-                                        {user?.email?.charAt(0).toUpperCase()}
-                                    </span>
-                                </div>
-                                <span className="text-slate-300 text-sm">{user?.email}</span>
-                            </div>
-                <button
-                    onClick={handleLogout}
-                                className="px-4 py-2 text-slate-300 hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-pink-600 rounded-lg transition-all duration-200 shadow-lg hover:shadow-red-500/25"
-                >
-                                <i className="ri-logout-box-line mr-2"></i>
-                    Logout
-                </button>
-            </div>
-                    </div>
+        <div className="min-h-screen bg-slate-950 text-white">
+            <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
+                <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
+                    <div className="flex items-center gap-3"><img src={Logo} alt="DevSync Logo" className="h-9 w-9" /><span className="text-xl font-bold">DevSync</span></div>
+                    <div className="flex items-center gap-4"><span className="hidden text-sm text-slate-400 sm:inline">{user?.email}</span><button onClick={handleLogout} className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800">Logout</button></div>
                 </div>
             </header>
 
-            {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {/* Welcome Section */}
-                <div className="mb-8">
-                    <h2 className="text-3xl font-bold text-white mb-2">Welcome back!</h2>
-                    <p className="text-slate-400">Manage your coding projects and collaborate with your team.</p>
+            <main className="mx-auto max-w-7xl px-4 py-8">
+                <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div><h1 className="text-3xl font-bold">Your Projects</h1><p className="mt-1 text-slate-400">Build and collaborate with your team.</p></div>
+                    <button onClick={() => setIsModalOpen(true)} className="rounded-lg bg-blue-600 px-5 py-3 font-medium hover:bg-blue-500">Create Project</button>
                 </div>
 
-                {projectError && (
-                    <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-                        {projectError}
-                    </div>
-                )}
+                {projectError && <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">{projectError}</div>}
 
-                {/* Action Bar */}
-                <div className="flex justify-between items-center mb-8">
-                    <div className="flex items-center space-x-4">
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-lg transition-all duration-200 shadow-lg hover:shadow-cyan-500/25 hover:shadow-xl"
-                        >
-                            <i className="ri-add-line text-lg"></i>
-                            <span className="font-medium">New Project</span>
-                        </button>
-                    </div>
-                    <div className="text-slate-400">
-                        {project.length} {project.length === 1 ? 'project' : 'projects'}
-                    </div>
-                </div>
-
-                {/* Projects Grid */}
                 {isFetchingProjects ? (
-                    <div className="text-center py-16 text-slate-400">Loading projects...</div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-400">Loading projects...</div>
                 ) : project.length === 0 ? (
-                    <div className="text-center py-16">
-                        <div className="w-24 h-24 mx-auto mb-6 bg-slate-700 rounded-full flex items-center justify-center">
-                            <i className="ri-folder-open-line text-3xl text-slate-400"></i>
-                        </div>
-                        <h3 className="text-xl font-semibold text-white mb-2">No projects yet</h3>
-                        <p className="text-slate-400 mb-6">Create your first project to start collaborating</p>
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-lg transition-all duration-200 shadow-lg hover:shadow-cyan-500/25"
-                        >
-                            Create Project
-                        </button>
-                    </div>
+                    <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900 p-12 text-center"><h2 className="text-xl font-semibold">No projects yet</h2><p className="mt-2 text-slate-400">Create your first project to start coding together.</p></div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {project.map((project) => {
-                            const isOwner = project.role === 'owner';
-                            const collaboratorCount = getCollaboratorCount(project);
-
-                            return (
-                                <div
-                                    key={project._id}
-                                    onClick={() => navigate(`/project/${project._id}`, { state: { project } })}
-                                    className="group bg-gradient-to-br from-slate-800/60 to-blue-900/40 backdrop-blur-sm border border-cyan-500/20 rounded-xl p-6 cursor-pointer hover:from-slate-800/80 hover:to-blue-900/60 hover:border-cyan-400/40 transition-all duration-200 hover:shadow-xl hover:shadow-cyan-500/20"
-                                >
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
-                                        <i className="ri-folder-line text-white text-xl"></i>
-                                    </div>
-                                    {isOwner && (
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                deleteProject(project._id);
-                                            }}
-                                            className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                                            title="Delete project"
-                                        >
-                                            <i className="ri-delete-bin-6-line"></i>
-                                        </button>
-                                    )}
+                    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                        {project.map((item) => (
+                            <div key={item._id} className="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
+                                <h2 className="truncate text-lg font-semibold">{item.name}</h2>
+                                <div className="mt-5 flex gap-2"><button onClick={() => navigate(`/project/${item._id}`)} className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500">Open</button><button onClick={() => deleteProject(item._id)} className="rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10">Delete</button></div>
                             </div>
-                                <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-blue-400 transition-colors">
-                                    {project.name}
-                                </h3>
-                                <div className="mb-3">
-                                    <span className={`text-xs px-2 py-1 rounded-full ${
-                                        isOwner ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-700 text-slate-300'
-                                    }`}>
-                                        {isOwner ? 'Owner' : 'Collaborator'}
-                                    </span>
-                                </div>
-                                <div className="flex items-center space-x-2 text-slate-400 mb-2">
-                                    <i className="ri-user-line"></i>
-                                    <span className="text-sm">{collaboratorCount} collaborator{collaboratorCount !== 1 ? 's' : ''}</span>
-                                </div>
-                                {project.createdBy && (
-                                    <div className="flex items-center space-x-2 text-slate-500">
-                                        <i className="ri-user-star-line"></i>
-                                        <span className="text-xs">
-                                            Created by {project.createdBy.email || 'You'}
-                                        </span>
-                                    </div>
-                                )}
-                                <div className="mt-4 pt-4 border-t border-slate-700">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs text-slate-500">Last updated</span>
-                                        <span className="text-xs text-slate-500">{formatDate(project.updatedAt)}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            )
-                        })}
-                        </div>
+                        ))}
+                    </div>
                 )}
             </main>
 
-            {/* Create Project Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md">
-                        <div className="p-6">
-                            <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-xl font-semibold text-white">Create New Project</h2>
-                                <button
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-                                >
-                                    <i className="ri-close-line"></i>
-                                </button>
-                            </div>
-                        <form onSubmit={createProject}>
-                                <div className="mb-6">
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">
-                                        Project Name
-                                    </label>
-                                <input
-                                    onChange={(e) => setProjectName(e.target.value)}
-                                    value={projectName}
-                                        type="text"
-                                        className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        placeholder="Enter project name"
-                                        required
-                                    />
-                            </div>
-                                <div className="flex space-x-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsModalOpen(false)}
-                                        className="flex-1 px-4 py-3 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-                                    >
-                                        Create Project
-                                    </button>
-                            </div>
-                        </form>
-                        </div>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+                    <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6">
+                        <div className="mb-5 flex items-center justify-between"><h2 className="text-xl font-semibold">Create Project</h2><button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">✕</button></div>
+                        <form onSubmit={createProject} className="space-y-4"><input value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Project name" required className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 outline-none focus:border-blue-500" /><div className="flex justify-end gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-slate-700 px-4 py-2">Cancel</button><button type="submit" className="rounded-lg bg-blue-600 px-4 py-2">Create</button></div></form>
                     </div>
                 </div>
             )}
