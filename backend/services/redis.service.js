@@ -9,6 +9,10 @@ const createTestRedisClient = () => {
             store.set(key, value);
             return 'OK';
         },
+        del: async (key) => {
+            store.delete(key);
+            return 1;
+        },
         on: () => {}
     };
 };
