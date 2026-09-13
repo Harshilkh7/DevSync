@@ -15,13 +15,10 @@ router.post('/login',
     body('password').isLength({ min: 3 }).withMessage('Password must be at least 3 characters long'),
     userController.loginController);
 
+router.post('/refresh', userController.refreshController);
+router.post('/logout', userController.logoutController);
+
 router.get('/profile', authMiddleware.authUser, userController.profileController);
-
-
-router.get('/logout', authMiddleware.authUser, userController.logoutController);
-
-
 router.get('/all', authMiddleware.authUser, userController.getAllUsersController);
-
 
 export default router;
