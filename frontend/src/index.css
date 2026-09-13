@@ -3,16 +3,49 @@
 @tailwind utilities;
 
 * {
-  margin: 0%;
-  padding: 0%;
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
 html,
-body {
-  height: 100%;
+body,
+#root {
+  min-height: 100%;
   width: 100%;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+}
+
+html {
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #0f172a;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #0f172a;
+}
+
+#root {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+img,
+svg,
+video,
+iframe {
+  max-width: 100%;
 }
 
 /* Custom Scrollbar Styles */
@@ -34,7 +67,11 @@ body {
   background: linear-gradient(135deg, #2563eb, #1e40af);
 }
 
-/* Hide scrollbar for specific elements */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2563eb #0f172a;
+}
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -44,23 +81,27 @@ body {
   display: none;
 }
 
-/* Custom focus styles */
 .focus-ring {
   @apply focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900;
 }
 
-/* Smooth transitions */
-* {
-  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+/* Keep transitions lightweight so scrolling/editing stays responsive. */
+button,
+a,
+input,
+textarea,
+select,
+.transition-all,
+.transition-colors,
+.transition-transform {
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
-/* Code editor specific styles */
 .hljs {
   background: #0f172a !important;
   color: #e2e8f0 !important;
 }
 
-/* Custom animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -76,10 +117,45 @@ body {
   animation: fadeIn 0.3s ease-out;
 }
 
-/* Glass morphism effect */
 .glass {
   background: rgba(15, 23, 42, 0.6);
   backdrop-filter: blur(15px);
   border: 1px solid rgba(59, 130, 246, 0.2);
   box-shadow: 0 8px 32px rgba(59, 130, 246, 0.1);
+}
+
+/* Workspace/preview safety: never let fixed-width panels create page-level overflow. */
+iframe {
+  display: block;
+}
+
+@media (max-width: 1100px) {
+  /* The workspace has fixed chat/file/preview columns. Allow horizontal scrolling
+     inside the workspace rather than pushing the whole document off-screen. */
+  body {
+    overflow-x: hidden;
+  }
+}
+
+@media (max-width: 768px) {
+  /* On small screens the workspace remains usable instead of being clipped. */
+  .max-w-7xl {
+    max-width: 100%;
+  }
+
+  header .max-w-7xl {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
