@@ -24,11 +24,10 @@ const Login = () => {
                 password
             });
 
-            if (!res.data?.token || !res.data?.user) {
+            if (!res.data?.user) {
                 throw new Error('Login succeeded but the server returned an invalid response.');
             }
 
-            localStorage.setItem('token', res.data.token);
             setUser(res.data.user);
             navigate('/');
         } catch (err) {
