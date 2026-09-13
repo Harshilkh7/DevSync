@@ -2,34 +2,22 @@ import socket from 'socket.io-client';
 
 let socketInstance = null;
 
+const socketOptions = (projectId) => ({
+    withCredentials: true,
+    ...(projectId ? { query: { projectId } } : {}),
+});
+
 export const initializeSocket = (projectId) => {
-    if (socketInstance) {
-        socketInstance.disconnect();
-    }
+    if (socketInstance) socketInstance.disconnect();
 
-    socketInstance = socket(import.meta.env.VITE_API_URL, { 
-        auth: {
-            token: localStorage.getItem('token'),
-        },
-        query: {
-            projectId,
-        },
-    });
-
+    socketInstance = socket(import.meta.env.VITE_API_URL, socketOptions(projectId));
     return socketInstance;
 };
 
 export const initializeUserSocket = () => {
-    if (socketInstance) {
-        socketInstance.disconnect();
-    }
+    if (socketInstance) socketInstance.disconnect();
 
-    socketInstance = socket(import.meta.env.VITE_API_URL, {
-        auth: {
-            token: localStorage.getItem('token'),
-        },
-    });
-
+    socketInstance = socket(import.meta.env.VITE_API_URL, socketOptions());
     return socketInstance;
 };
 
