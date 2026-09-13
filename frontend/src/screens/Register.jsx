@@ -24,11 +24,10 @@ const Register = () => {
                 password
             });
 
-            if (!res.data?.token || !res.data?.user) {
+            if (!res.data?.user) {
                 throw new Error('Registration succeeded but the server returned an invalid response.');
             }
 
-            localStorage.setItem('token', res.data.token);
             setUser(res.data.user);
             navigate('/');
         } catch (err) {
@@ -48,19 +47,13 @@ const Register = () => {
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
-                    <div className="flex justify-center mb-6">
-                        <img src={Logo} alt="DevSync Logo" className="w-20 h-20" />
-                    </div>
+                    <div className="flex justify-center mb-6"><img src={Logo} alt="DevSync Logo" className="w-20 h-20" /></div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-2">Join DevSync</h1>
                     <p className="text-slate-400">Create your account to start collaborating</p>
                 </div>
 
                 <div className="bg-gradient-to-br from-slate-800/60 to-blue-900/40 backdrop-blur-sm border border-cyan-500/20 rounded-xl p-8 shadow-2xl shadow-cyan-500/10">
-                    {error && (
-                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                            <p className="text-red-400 text-sm">{error}</p>
-                        </div>
-                    )}
+                    {error && <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg"><p className="text-red-400 text-sm">{error}</p></div>}
 
                     <form onSubmit={submitHandler} className="space-y-6">
                         <div>
@@ -76,9 +69,7 @@ const Register = () => {
                         </button>
                     </form>
 
-                    <div className="mt-6 text-center">
-                        <p className="text-slate-400">Already have an account?{' '}<Link to="/login" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">Sign in</Link></p>
-                    </div>
+                    <div className="mt-6 text-center"><p className="text-slate-400">Already have an account?{' '}<Link to="/login" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">Sign in</Link></p></div>
                 </div>
             </div>
         </div>
