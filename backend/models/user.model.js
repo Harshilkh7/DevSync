@@ -27,7 +27,7 @@ userSchema.methods.isValidPassword = async function (password) {
 };
 
 const getAccessSecret = () => process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
-const getRefreshSecret = () => process.env.JWT_REFRESH_SECRET;
+const getRefreshSecret = () => process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
 
 userSchema.methods.generateAccessToken = function () {
     const secret = getAccessSecret();
@@ -51,7 +51,6 @@ userSchema.methods.generateRefreshToken = function (jti) {
     );
 };
 
-// Kept for compatibility with any code that still imports generateJWT.
 userSchema.methods.generateJWT = function () {
     return this.generateAccessToken();
 };
