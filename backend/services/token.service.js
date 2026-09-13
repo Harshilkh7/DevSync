@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import RefreshSession from '../models/refreshSession.model.js';
+import userModel from '../models/user.model.js';
 import redisClient from './redis.service.js';
 
 export const ACCESS_COOKIE = 'accessToken';
@@ -11,7 +12,7 @@ export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 const hashJti = (jti) => crypto.createHash('sha256').update(jti).digest('hex');
 
 const getRefreshSecret = () => {
-    const secret = process.env.JWT_REFRESH_SECRET;
+    const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
     if (!secret) throw new Error('JWT refresh secret is not configured');
     return secret;
 };
@@ -59,7 +60,7 @@ export const rotateRefreshToken = async (refreshToken, req) => {
         throw new Error('Refresh session revoked or expired');
     }
 
-    const user = await (await import('../models/user.model.js')).default.findById(decoded.userId);
+    const user = await userModel.findById(decoded.userId);
     if (!user) {
         await redisClient.del(`refresh:${decoded.jti}`);
         await oldSession.updateOne({ revokedAt: new Date() });
@@ -85,7 +86,7 @@ export const revokeRefreshToken = async (refreshToken) => {
             await redisClient.del(`refresh:${decoded.jti}`);
         }
     } catch {
-        // Always clear the browser cookie even if the token is already invalid.
+        // Cookie is cleared by the controller even when the token is invalid.
     }
 };
 
