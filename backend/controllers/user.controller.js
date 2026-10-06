@@ -18,6 +18,7 @@ const accessCookieOptions = {
     httpOnly: true,
     secure: isProduction,
     sameSite: isProduction ? 'none' : 'lax',
+    partitioned: isProduction,
     maxAge: ACCESS_TOKEN_TTL_SECONDS * 1000,
     path: '/',
 };
