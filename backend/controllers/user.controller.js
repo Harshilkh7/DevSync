@@ -17,7 +17,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const accessCookieOptions = {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'lax',
+    sameSite: isProduction ? 'none' : 'lax',
     maxAge: ACCESS_TOKEN_TTL_SECONDS * 1000,
     path: '/',
 };
