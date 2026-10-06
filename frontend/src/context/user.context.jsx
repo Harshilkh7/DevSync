@@ -1,12 +1,20 @@
-import { createContext, useEffect, useState } from 'react';
+import { createContext, useEffect, useRef, useState } from 'react';
 import axios from '../config/axios';
 import { disconnectSocket } from '../config/socket';
 
 export const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
+    const [user, setUserState] = useState(null);
+    const userRef = useRef(null);
     const [authLoading, setAuthLoading] = useState(true);
+
+    const setUser = (nextUser) => {
+        userRef.current = typeof nextUser === 'function'
+            ? nextUser(userRef.current)
+            : nextUser;
+        setUserState(userRef.current);
+    };
 
     useEffect(() => {
         let mounted = true;
@@ -14,9 +22,10 @@ export const UserProvider = ({ children }) => {
         const restoreSession = async () => {
             try {
                 const response = await axios.post('/users/refresh');
-                if (mounted) setUser(response.data.user);
+                if (mounted && !userRef.current) setUser(response.data.user);
             } catch {
-                if (mounted) setUser(null);
+                // Do not let a stale startup refresh clear a user who has just logged in.
+                if (mounted && !userRef.current) setUser(null);
             } finally {
                 if (mounted) setAuthLoading(false);
             }
