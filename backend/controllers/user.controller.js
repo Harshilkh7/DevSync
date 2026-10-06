@@ -90,6 +90,7 @@ export const loginController = async (req, res) => {
 export const refreshController = async (req, res) => {
     try {
         const refreshToken = req.cookies[REFRESH_COOKIE];
+        console.log('[AUTH_REFRESH]', { hasRefreshCookie: Boolean(refreshToken) });
         if (!refreshToken) return res.status(401).json({ message: 'Refresh token missing' });
 
         const { accessToken, refreshToken: rotatedRefreshToken } = await rotateRefreshToken(refreshToken, req);
@@ -102,7 +103,8 @@ export const refreshController = async (req, res) => {
 
         setAuthCookies(res, accessToken, rotatedRefreshToken);
         return res.status(200).json({ user: sanitizeUser(user) });
-    } catch {
+    } catch (error) {
+        console.error('[AUTH_REFRESH_FAILED]', error.message);
         res.clearCookie(ACCESS_COOKIE, clearCookieOptions);
         res.clearCookie(REFRESH_COOKIE, { ...clearCookieOptions, path: '/users' });
         return res.status(401).json({ message: 'Invalid or expired refresh token' });
