@@ -45,7 +45,6 @@ export const useProjectCollaboration = ({ socket, projectId, fileName, user, ena
         let joined = false;
         let doc = null;
         let awareness = null;
-        let yText = null;
         let updateHandler = null;
         let awarenessHandler = null;
 
@@ -86,7 +85,6 @@ export const useProjectCollaboration = ({ socket, projectId, fileName, user, ena
 
             doc = null;
             awareness = null;
-            yText = null;
             updateHandler = null;
             awarenessHandler = null;
             if (updateUi) setBinding(null);
@@ -102,7 +100,6 @@ export const useProjectCollaboration = ({ socket, projectId, fileName, user, ena
             const joiningText = joiningDoc.getText('content');
             doc = joiningDoc;
             awareness = joiningAwareness;
-            yText = joiningText;
 
             const palette = colorFor(user._id);
             joiningAwareness.setLocalStateField('user', {
