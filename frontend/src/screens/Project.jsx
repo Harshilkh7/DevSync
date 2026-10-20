@@ -9,6 +9,7 @@ import { javascript } from '@codemirror/lang-javascript'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { getWebContainer } from '../config/webContainer'
 import Logo from '../assets/logo.svg'
+import { useProjectCollaboration } from '../hooks/useProjectCollaboration'
 
 const getFileContents = (fileTree, fileName) => fileTree?.[fileName]?.file?.contents || ''
 
@@ -48,6 +49,7 @@ const Project = () => {
     const [fileError, setFileError] = useState('')
 
     const messageBox = useRef(null)
+    const socketRef = useRef(null)
     const webContainerRef = useRef(null)
     const installedPackageJsonRef = useRef(null)
 
@@ -65,6 +67,31 @@ const Project = () => {
 
     const isOwner = project?.role === 'owner'
 
+    const handleCollaborativeContent = useCallback((fileName, content) => {
+        setFileTree((previous) => {
+            const existing = previous[fileName] || {}
+            const existingFile = existing.file || {}
+            if (existingFile.contents === content) return previous
+            return { ...previous, [fileName]: { ...existing, file: { ...existingFile, contents: content } } }
+        })
+        setEditorValue(content)
+        setSaveStatus('Synced')
+    }, [])
+
+    const {
+        binding: collaborationBinding,
+        onlineUsers,
+        status: collaborationStatus,
+        revision: collaborationRevision
+    } = useProjectCollaboration({
+        socket: socketRef.current,
+        projectId,
+        fileName: currentFile,
+        user,
+        enabled: Boolean(!isLoading && project && currentFile),
+        onContentChange: handleCollaborativeContent
+    })
+
     useEffect(() => {
         if (messageBox.current) messageBox.current.scrollTop = messageBox.current.scrollHeight
     }, [messages])
@@ -81,6 +108,7 @@ const Project = () => {
         }
         let isMounted = true
         const socket = initializeSocket(projectId)
+        socketRef.current = socket
         const handleMessage = (data) => {
             setIsSendingMessage(false)
             setMessages((prev) => data._id && prev.some((item) => item._id === data._id) ? prev : [...prev, data])
@@ -96,9 +124,19 @@ const Project = () => {
             setActionStatus(data?.message || 'Something went wrong.')
             setIsSendingMessage(false)
         }
+        const handleFileContentUpdate = (data) => {
+            if (!data?.fileName || typeof data.content !== 'string') return
+            setFileTree((previous) => {
+                const existing = previous[data.fileName] || {}
+                const existingFile = existing.file || {}
+                if (existingFile.contents === data.content) return previous
+                return { ...previous, [data.fileName]: { ...existing, file: { ...existingFile, contents: data.content } } }
+            })
+        }
         receiveMessage('project-message', handleMessage)
         receiveMessage('file-tree-updated', handleFileTreeUpdate)
         receiveMessage('project-error', handleProjectError)
+        socket.on('file-content-updated', handleFileContentUpdate)
 
         Promise.all([
             axios.get(`/projects/get-project/${projectId}`),
@@ -142,6 +180,8 @@ const Project = () => {
             socket.off('project-message', handleMessage)
             socket.off('file-tree-updated', handleFileTreeUpdate)
             socket.off('project-error', handleProjectError)
+            socket.off('file-content-updated', handleFileContentUpdate)
+            if (socketRef.current === socket) socketRef.current = null
             disconnectSocket()
         }
     }, [projectId])
@@ -203,13 +243,31 @@ const Project = () => {
     const saveFileTree = (nextFileTree) => {
         setSaveStatus('Saving...')
         setFileTree(nextFileTree)
-        sendMessage('file-tree-save', { fileTree: nextFileTree })
-        window.setTimeout(() => setSaveStatus('Saved'), 300)
+        const socket = socketRef.current
+        if (!socket?.connected) {
+            setSaveStatus('Offline')
+            return
+        }
+        socket.emit('file-tree-save', {
+            fileTree: nextFileTree,
+            baseFileTree: fileTree,
+            baseRevision: collaborationRevision
+        }, (response) => {
+            setSaveStatus(response?.ok ? 'Saved' : (response?.error || 'Save failed'))
+        })
     }
 
     const saveCurrentFile = () => {
         if (!currentFile) return
-        saveFileTree({ ...fileTree, [currentFile]: { file: { contents: editorValue } } })
+        const socket = socketRef.current
+        if (!socket?.connected) {
+            setSaveStatus('Offline')
+            return
+        }
+        setSaveStatus('Saving...')
+        socket.emit('collab-flush', { projectId, fileName: currentFile }, (response) => {
+            setSaveStatus(response?.ok ? 'Saved' : (response?.error || 'Save failed'))
+        })
     }
 
     const createFile = (e) => {
@@ -296,7 +354,12 @@ const Project = () => {
                     <div className="flex items-center space-x-3 min-w-0"><img src={Logo} alt="DevSync" className="w-6 h-6 shrink-0" /><h1 className="text-lg font-semibold text-white truncate">{project.name}</h1></div>
                 </div>
                 <div className="flex items-center space-x-3 shrink-0">
-                    <span className="hidden sm:inline text-xs text-slate-400">{saveStatus}</span>
+                    <span className="hidden sm:inline text-xs text-slate-400">{saveStatus} · {collaborationStatus}</span>
+                    <div className="hidden lg:flex items-center gap-1.5" title={onlineUsers.map((onlineUser) => onlineUser.email).join(', ')}>
+                        <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                        <span className="text-xs text-slate-400 mr-1">{onlineUsers.length} online</span>
+                        {onlineUsers.slice(0, 3).map((onlineUser) => <span key={onlineUser.id} className="w-6 h-6 rounded-full bg-slate-600 border border-slate-500 flex items-center justify-center text-[10px] text-white" title={onlineUser.email}>{(onlineUser.email || 'U').charAt(0).toUpperCase()}</span>)}
+                    </div>
                     {isOwner && <button onClick={() => setIsModalOpen(true)} className="flex items-center space-x-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"><i className="ri-user-add-line"></i><span className="hidden sm:inline">Add Collaborator</span></button>}
                     <button onClick={() => setIsSidePanelOpen(!isSidePanelOpen)} className="p-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg"><i className="ri-group-line"></i></button>
                 </div>
@@ -333,7 +396,7 @@ const Project = () => {
                                 <div className="flex min-w-0 overflow-x-auto scrollbar-hide">{openFiles.map((file) => <button key={file} onClick={() => openFile(file)} className={`shrink-0 px-4 py-2 text-sm border-r border-slate-700 ${currentFile === file ? 'bg-slate-900 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}><div className="flex items-center space-x-2"><i className="ri-file-line"></i><span>{file}</span></div></button>)}</div>
                                 <div className="shrink-0 flex items-center space-x-2 p-2">{runStatus && <span className="hidden xl:block max-w-48 truncate text-xs text-slate-400" title={runStatus}>{runStatus}</span>}<button onClick={saveCurrentFile} disabled={!currentFile} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg text-sm"><i className="ri-save-line mr-1"></i><span className="hidden md:inline">Save</span></button><button onClick={runCode} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm"><i className="ri-play-line mr-1"></i>Run</button></div>
                             </div>
-                            <div className="flex-1 min-h-0 overflow-hidden">{currentFile ? <CodeMirror value={editorValue} height="100%" theme={oneDark} extensions={[javascript({ jsx: true })]} basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: true, autocompletion: true }} onChange={(value) => { setEditorValue(value); setSaveStatus('Unsaved') }} onBlur={saveCurrentFile} className="h-full [&_.cm-editor]:h-full [&_.cm-scroller]:font-mono [&_.cm-scroller]:text-sm" /> : <div className="h-full flex items-center justify-center text-slate-400"><div className="text-center"><i className="ri-file-line text-4xl mb-4"></i><p>Select a file to start editing</p></div></div>}</div>
+                            <div className="flex-1 min-h-0 overflow-hidden">{currentFile ? (collaborationBinding?.fileName === currentFile ? <CodeMirror value={editorValue} height="100%" theme={oneDark} extensions={[javascript({ jsx: true }), collaborationBinding.extension]} basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: true, autocompletion: true }} onChange={(value) => { setEditorValue(value); setSaveStatus('Syncing…') }} onBlur={saveCurrentFile} className="h-full [&_.cm-editor]:h-full [&_.cm-scroller]:font-mono [&_.cm-scroller]:text-sm" /> : <div className="h-full flex items-center justify-center text-slate-400"><div className="text-center"><div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div><p>Connecting collaborative editor…</p></div></div>) : <div className="h-full flex items-center justify-center text-slate-400"><div className="text-center"><i className="ri-file-line text-4xl mb-4"></i><p>Select a file to start editing</p></div></div>}</div>
                         </div>
 
                         {iframeUrl && webContainer && <div className="w-[28rem] max-w-[38vw] shrink-0 bg-slate-900 border-l border-slate-700 flex flex-col min-h-0"><div className="shrink-0 px-4 py-3 border-b border-slate-700 flex items-center justify-between"><div className="flex items-center space-x-2"><span className="h-2.5 w-2.5 rounded-full bg-red-400"></span><span className="h-2.5 w-2.5 rounded-full bg-amber-400"></span><span className="h-2.5 w-2.5 rounded-full bg-emerald-400"></span></div><h3 className="text-sm font-medium text-slate-200">Preview</h3></div><div className="shrink-0 p-3 border-b border-slate-700 bg-slate-800/80"><div className="flex items-center space-x-2 rounded-md border border-slate-600 bg-slate-950 px-3 py-2"><i className="ri-lock-line text-slate-400 text-sm"></i><input type="text" value={iframeUrl} onChange={(e) => setIframeUrl(e.target.value)} className="min-w-0 flex-1 bg-transparent text-slate-100 text-sm outline-none" /></div></div><div className="flex-1 min-h-0 bg-white overflow-auto"><iframe src={iframeUrl} className="w-full h-full min-h-0 border-0 bg-white" title="Preview" /></div></div>}

@@ -1,5 +1,10 @@
 import mongoose from 'mongoose';
 
+const collabStateSchema = new mongoose.Schema({
+    fileName: { type: String, required: true },
+    update: { type: String, required: true },
+    revision: { type: Number, default: 0 },
+}, { _id: false });
 
 const projectSchema = new mongoose.Schema(
     {
@@ -17,6 +22,10 @@ const projectSchema = new mongoose.Schema(
         fileTree: {
             type: Object,
             default: {}
+        },
+        collabState: {
+            type: [collabStateSchema],
+            default: []
         },
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
