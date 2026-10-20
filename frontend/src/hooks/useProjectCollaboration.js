@@ -40,9 +40,14 @@ export const useProjectCollaboration = ({ socket, projectId, fileName, user, ena
             return undefined;
         }
 
-        let disposed = false, joining = false, joined = false;
-        let doc = null, awareness = null, yText = null;
-        let updateHandler = null, awarenessHandler = null;
+        let disposed = false;
+        let joining = false;
+        let joined = false;
+        let doc = null;
+        let awareness = null;
+        let yText = null;
+        let updateHandler = null;
+        let awarenessHandler = null;
 
         const remoteUpdateHandler = (data) => {
             if (disposed || data?.fileName !== fileName || !doc || !Array.isArray(data.update)) return;
@@ -54,50 +59,87 @@ export const useProjectCollaboration = ({ socket, projectId, fileName, user, ena
                 setStatus('Sync error');
             }
         };
+
         const remoteAwarenessHandler = (data) => {
             if (disposed || data?.fileName !== fileName || !awareness || !Array.isArray(data.update)) return;
-            try { applyAwarenessUpdate(awareness, toBytes(data.update), 'socket'); }
-            catch (error) { console.error('Unable to apply collaborator awareness:', error); }
+            try {
+                applyAwarenessUpdate(awareness, toBytes(data.update), 'socket');
+            } catch (error) {
+                console.error('Unable to apply collaborator awareness:', error);
+            }
+        };
+
+        const disposeDocument = (notifyServer = false, updateUi = true) => {
+            const oldDoc = doc;
+            const oldAwareness = awareness;
+            if (notifyServer && joined && socket.connected) socket.emit('collab-leave', { projectId, fileName });
+            joined = false;
+            joining = false;
+
+            socket.off('collab-update', remoteUpdateHandler);
+            socket.off('collab-awareness-update', remoteAwarenessHandler);
+            if (oldAwareness && awarenessHandler) oldAwareness.off('update', awarenessHandler);
+            if (oldAwareness) oldAwareness.setLocalState(null);
+            if (oldDoc && updateHandler) oldDoc.off('update', updateHandler);
+            if (oldAwareness) oldAwareness.destroy();
+            if (oldDoc) oldDoc.destroy();
+
+            doc = null;
+            awareness = null;
+            yText = null;
+            updateHandler = null;
+            awarenessHandler = null;
+            if (updateUi) setBinding(null);
         };
 
         const begin = () => {
-            if (disposed || joining || !socket.connected) return;
+            if (disposed || joining || joined || !socket.connected) return;
             joining = true;
             setStatus('Joining document…');
-            doc = new Y.Doc();
-            awareness = new Awareness(doc);
-            yText = doc.getText('content');
+
+            const joiningDoc = new Y.Doc();
+            const joiningAwareness = new Awareness(joiningDoc);
+            const joiningText = joiningDoc.getText('content');
+            doc = joiningDoc;
+            awareness = joiningAwareness;
+            yText = joiningText;
+
             const palette = colorFor(user._id);
-            awareness.setLocalStateField('user', {
-                name: user.email || 'Collaborator', color: palette.color, colorLight: palette.light,
+            joiningAwareness.setLocalStateField('user', {
+                name: user.email || 'Collaborator',
+                color: palette.color,
+                colorLight: palette.light,
             });
+
             socket.on('collab-update', remoteUpdateHandler);
             socket.on('collab-awareness-update', remoteAwarenessHandler);
 
             socket.timeout(10000).emit('collab-join', { projectId, fileName }, (timeoutError, response) => {
-                if (disposed) return;
+                if (disposed || doc !== joiningDoc) return;
                 if (timeoutError || !response?.ok || !Array.isArray(response.update)) {
+                    disposeDocument(false, false);
                     setStatus(response?.error || 'Unable to sync document');
-                    joining = false;
-                    return;
-                }
-                try {
-                    Y.applyUpdate(doc, toBytes(response.update), 'server-sync');
-                    if (Array.isArray(response.awareness) && response.awareness.length) {
-                        applyAwarenessUpdate(awareness, toBytes(response.awareness), 'socket');
-                    }
-                } catch (error) {
-                    setStatus('Unable to load document');
-                    console.error('Unable to load collaborative document:', error);
-                    joining = false;
                     return;
                 }
 
-                let lastText = yText.toString();
+                try {
+                    Y.applyUpdate(joiningDoc, toBytes(response.update), 'server-sync');
+                    if (Array.isArray(response.awareness) && response.awareness.length) {
+                        applyAwarenessUpdate(joiningAwareness, toBytes(response.awareness), 'socket');
+                    }
+                } catch (error) {
+                    disposeDocument(false, false);
+                    setStatus('Unable to load document');
+                    console.error('Unable to load collaborative document:', error);
+                    return;
+                }
+
+                let lastText = joiningText.toString();
                 setRevision(Number.isFinite(response.revision) ? response.revision : 0);
                 onContentChange(fileName, lastText);
+
                 updateHandler = (update, origin) => {
-                    const nextText = yText.toString();
+                    const nextText = joiningText.toString();
                     if (nextText !== lastText) {
                         lastText = nextText;
                         onContentChange(fileName, nextText);
@@ -106,43 +148,54 @@ export const useProjectCollaboration = ({ socket, projectId, fileName, user, ena
                         socket.emit('collab-update', { projectId, fileName, update: toWire(update) });
                     }
                 };
+
                 awarenessHandler = ({ added, updated, removed }, origin) => {
                     if (origin === 'socket' || !joined || !socket.connected) return;
                     const changedClients = [...added, ...updated, ...removed];
                     if (!changedClients.length) return;
                     socket.emit('collab-awareness-update', {
-                        projectId, fileName, update: toWire(encodeAwarenessUpdate(awareness, changedClients)),
+                        projectId,
+                        fileName,
+                        update: toWire(encodeAwarenessUpdate(joiningAwareness, changedClients)),
                     });
                 };
-                doc.on('update', updateHandler);
-                awareness.on('update', awarenessHandler);
-                setBinding({ fileName, extension: yCollab(yText, awareness, { undoManager: new Y.UndoManager(yText) }) });
+
+                joiningDoc.on('update', updateHandler);
+                joiningAwareness.on('update', awarenessHandler);
+                setBinding({
+                    fileName,
+                    extension: yCollab(joiningText, joiningAwareness, {
+                        undoManager: new Y.UndoManager(joiningText),
+                    }),
+                });
                 joined = true;
                 joining = false;
                 setStatus('Live');
                 socket.emit('collab-awareness-update', {
-                    projectId, fileName, update: toWire(encodeAwarenessUpdate(awareness, [doc.clientID])),
+                    projectId,
+                    fileName,
+                    update: toWire(encodeAwarenessUpdate(joiningAwareness, [joiningDoc.clientID])),
                 });
                 if (Array.isArray(response.presence)) setOnlineUsers(response.presence);
             });
         };
 
+        const handleDisconnect = () => {
+            disposeDocument(false, true);
+            setOnlineUsers([]);
+            setStatus('Reconnecting…');
+        };
+
         setStatus(socket.connected ? 'Joining document…' : 'Connecting…');
         socket.on('connect', begin);
+        socket.on('disconnect', handleDisconnect);
         if (socket.connected) begin();
+
         return () => {
             disposed = true;
             socket.off('connect', begin);
-            socket.off('collab-update', remoteUpdateHandler);
-            socket.off('collab-awareness-update', remoteAwarenessHandler);
-            if (awareness && awarenessHandler) {
-                awareness.setLocalState(null);
-                awareness.off('update', awarenessHandler);
-            }
-            if (doc && updateHandler) doc.off('update', updateHandler);
-            if (joined && socket.connected) socket.emit('collab-leave', { projectId, fileName });
-            if (awareness) awareness.destroy();
-            if (doc) doc.destroy();
+            socket.off('disconnect', handleDisconnect);
+            disposeDocument(true, false);
         };
     }, [socket, projectId, fileName, user?._id, user?.email, enabled, onContentChange]);
 
