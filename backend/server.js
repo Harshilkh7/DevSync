@@ -241,6 +241,14 @@ io.on('connection', socket => {
 
     socket.on('collab-leave', (data) => {
         if (!data?.fileName || data.fileName !== socket.data.collabFileName) return;
+
+        const record = collabDocuments.get(collabKey(socket.roomId, data.fileName));
+        const ownedClients = record?.awarenessClientsBySocket.get(socket.id);
+        if (record && ownedClients?.size) {
+            removeAwarenessStates(record.awareness, [...ownedClients], 'server-disconnect');
+            record.awarenessClientsBySocket.delete(socket.id);
+        }
+
         if (socket.data.collabRoom) socket.leave(socket.data.collabRoom);
         socket.data.collabRoom = null;
         socket.data.collabFileName = null;
